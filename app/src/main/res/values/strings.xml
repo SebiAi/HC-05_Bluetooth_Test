@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">HC-05 Bluetooth Test</string>
+    <string name="status_notConnected">Not Connected</string>
+    <string name="status_gettingUUIDs">Getting UUIDs - Please wait …</string>
+    <string name="status_connecting">Connecting - Please wait …</string>
+    <string name="status_connected">Connected!</string>
+    <string name="status_error">ERROR!</string>
+    <string name="status_noValidDevice">Not a valid Octa-Mix device!</string>
+</resources>
