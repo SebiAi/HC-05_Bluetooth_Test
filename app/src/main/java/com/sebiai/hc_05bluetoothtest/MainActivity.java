@@ -1,5 +1,6 @@
 package com.sebiai.hc_05bluetoothtest;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -12,6 +13,9 @@ import android.content.IntentFilter;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
+import android.view.KeyEvent;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -21,16 +25,20 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Set;
 
 // Sauce: https://www.geeksforgeeks.org/all-about-hc-05-bluetooth-module-connection-with-android/
+// Sauce2: https://github.com/MEnthoven/Android-HC05-App
+// TODO: Implement for multiple activities/fragments: https://stackoverflow.com/questions/17082393/handlers-and-multiple-activities
 
 public class MainActivity extends AppCompatActivity {
     // Views
     ListView selectDeviceListView;
     EditText inputEditText;
     Button sendButton;
+    Button clearButton;
     TextView connectionStatusTextView;
     public TextView outputTextView;
 
@@ -39,8 +47,6 @@ public class MainActivity extends AppCompatActivity {
     Set<BluetoothDevice> devices;
 
     // Other
-    boolean onItemClickGate = true;
-    Thread thread;
     public View currentView = null;
 
     @Override
@@ -69,9 +75,13 @@ public class MainActivity extends AppCompatActivity {
 
             // Input text
         inputEditText = findViewById(R.id.edittext_input);
+        inputEditText.setOnKeyListener(this::inputEditTextOnKey);
             // Send button
         sendButton = findViewById(R.id.button_send);
         sendButton.setOnClickListener(this::sendButtonOnClick);
+            // Clear button
+        clearButton = findViewById(R.id.button_clear);
+        clearButton.setOnClickListener(this::clearButtonOnClick);
 
         connectionStatusTextView = findViewById(R.id.textview_connectionstatus);
         outputTextView = findViewById(R.id.textview_output);
@@ -81,7 +91,7 @@ public class MainActivity extends AppCompatActivity {
     private void pairedDevices()
     {
         devices = bluetoothAdapter.getBondedDevices();
-        ArrayList list = new ArrayList();
+        ArrayList<String> list = new ArrayList<>();
 
         if (devices.size() > 0) {
             for (BluetoothDevice bt : devices) {
@@ -95,7 +105,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Adding the devices to the list with ArrayAdapter class
-        final ArrayAdapter adapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1, list);
+        final ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, list);
         selectDeviceListView.setAdapter(adapter);
 
         // Method called when the device from the list is clicked
@@ -110,14 +120,15 @@ public class MainActivity extends AppCompatActivity {
             if (textView.getBackground() instanceof ColorDrawable) {
                 int color = ((ColorDrawable)textView.getBackground()).getColor();
                 if (color == Color.GREEN) {
-                    thread.interrupt();
+                    getBluetoothService().stop();
                     return;
                 }
             }
 
-            if ((thread != null && thread.isAlive()) || currentView != null) return;
+            if (getBluetoothService().isWorking())
+                return;
+
             currentView = view;
-            onItemClickGate = false;
 
             // Color
             view.setBackgroundColor(Color.GREEN);
@@ -127,10 +138,17 @@ public class MainActivity extends AppCompatActivity {
             String address = name.substring(name.length() - 17);
             BluetoothDevice bluetoothDevice = bluetoothAdapter.getRemoteDevice(address);
 
+            // Let BluetoothService handle everything
+            mHandler handler = new mHandler(MainActivity.this);
+            setBluetoothService(new BluetoothService(handler, bluetoothDevice));
+            getBluetoothService().connect();
+
+            /*
             // Get UUIDs - broadcast receiver continues
                 // Set status
             connectionStatusTextView.setText(R.string.status_gettingUUIDs);
             bluetoothDevice.fetchUuidsWithSdp();
+             */
         }
     };
 
@@ -140,21 +158,88 @@ public class MainActivity extends AppCompatActivity {
             String action = intent.getAction();
 
             if (BluetoothDevice.ACTION_UUID.equals(action)) {
+                /*
                 Runnable bluetoothRunnable = new BluetoothRunnable(intent, (MainActivity) context);
                 thread = new Thread(bluetoothRunnable);
                 thread.start();
+                 */
             }
         }
     };
 
-    void initAgain() {
-        for (int i = 0; i < selectDeviceListView.getAdapter().getCount(); i++) {
-            selectDeviceListView.getAdapter().getView(i, null, null).setBackgroundColor(Color.RED);
+    void sendButtonOnClick(View view) {
+        String sendString = inputEditText.getText().toString() + "\r\n";
+        addMessageToTextView("S: " + sendString);
+        getBluetoothService().write(sendString);
+
+        //inputEditText.setText("");
+    }
+    private boolean inputEditTextOnKey(View view, int keyCode, KeyEvent keyEvent) {
+        if (keyEvent.getAction() == KeyEvent.ACTION_UP) {
+            if (keyCode == KeyEvent.KEYCODE_ENTER) {
+                if (sendButton.isEnabled())
+                    sendButtonOnClick(view);
+                return true;
+            }
         }
-        onItemClickGate = true;
+        return false;
     }
 
-    void sendButtonOnClick(View view) {
-        // TODO: Do stuff on send
+    void clearButtonOnClick(View view) {
+        outputTextView.setText("");
+    }
+
+    BluetoothService getBluetoothService() {
+        return ((cBaseApplication)getApplicationContext()).bluetoothService;
+    }
+
+    void setBluetoothService(BluetoothService bluetoothService) {
+        ((cBaseApplication)getApplicationContext()).bluetoothService = bluetoothService;
+    }
+
+    void addMessageToTextView(String out) {
+        String text = out + outputTextView.getText().toString();
+        outputTextView.setText(text);
+    }
+
+    private static class mHandler extends Handler {
+        private final WeakReference<MainActivity> mActivity;
+
+        public mHandler(MainActivity activity) {
+            mActivity = new WeakReference<>(activity);
+        }
+
+        @Override
+        public void handleMessage(@NonNull Message msg) {
+            final MainActivity activity = mActivity.get();
+
+            switch (msg.what) {
+                case Constants.MESSAGE_STATE_CHANGE:
+                    switch (msg.arg1) {
+                        case Constants.STATE_CONNECTED:
+                            activity.connectionStatusTextView.setText("Connected!");
+                            activity.sendButton.setEnabled(true);
+                            break;
+                        case Constants.STATE_CONNECTING:
+                            activity.connectionStatusTextView.setText("Connecting...");
+                            break;
+                        case Constants.STATE_NONE:
+                            activity.connectionStatusTextView.setText("Not Connected");
+                            activity.currentView.setBackground(activity.outputTextView.getBackground());
+                            activity.sendButton.setEnabled(false);
+                            break;
+                        case Constants.STATE_ERROR:
+                            activity.connectionStatusTextView.setText("Error - Not Connected");
+                            activity.currentView.setBackground(activity.outputTextView.getBackground());
+                            activity.sendButton.setEnabled(false);
+                            break;
+                    }
+                    break;
+                case Constants.MESSAGE_READ:
+                    String message = (String) msg.obj;
+                    activity.addMessageToTextView("R: " + message);
+                    break;
+            }
+        }
     }
 }
