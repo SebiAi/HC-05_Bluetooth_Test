@@ -3,6 +3,14 @@ plugins {
 }
 
 android {
+    signingConfigs {
+        debug {
+            storeFile file(System.getenv("ANDROID_STORE_FILE_OCTAMIX"))
+            storePassword '3&7&6G58^9%v&wa@'
+            keyPassword '3&7&6G58^9%v&wa@'
+            keyAlias 'octa-mix'
+        }
+    }
     compileSdk 31
 
     defaultConfig {

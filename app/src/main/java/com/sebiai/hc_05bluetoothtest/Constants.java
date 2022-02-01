@@ -16,6 +16,12 @@ public interface Constants {
     int MESSAGE_WRITE = 3;
     int MESSAGE_INFO = 4;
 
+    // BroadcastReceiver
+    String INTENT_BT_MESSAGE = "intent_bt_message";
+    String KEY_WHAT = "key_what";
+    String KEY_STATE = "key_state";
+    String KEY_MESSAGE = "key_message";
+
 
     String INFO = "info";
     UUID myUUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb");

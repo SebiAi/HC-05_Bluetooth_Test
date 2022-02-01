@@ -2,24 +2,21 @@ package com.sebiai.hc_05bluetoothtest;
 
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
-import android.os.Bundle;
-import android.os.Message;
-import android.os.Handler;
+import android.content.Intent;
 import android.util.Log;
 
 import androidx.annotation.RequiresPermission;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Objects;
 import java.util.UUID;
 
 public class BluetoothService {
     private final String TAG = "BluetoothService";
 
-    private final Handler mHandler;
     private int state;
 
     BluetoothDevice device;
@@ -27,15 +24,13 @@ public class BluetoothService {
     ConnectThread connectThread;
     ConnectedThread connectedThread;
 
-    public BluetoothService(Handler handler, BluetoothDevice device) {
+    public BluetoothService(BluetoothDevice device) {
         state = Constants.STATE_NONE;
-        this.mHandler = handler;
         this.device = device;
     }
 
     public BluetoothService() {
         state = Constants.STATE_NOT_INITIALIZED;
-        this.mHandler = null;
         this.device = null;
     }
 
@@ -57,8 +52,36 @@ public class BluetoothService {
     private synchronized void setState(int state) {
         Log.d(TAG, "setState() " + this.state + " -> " + state);
         this.state = state;
-        // Give the new state to the Handler so the UI Activity can update
-        Objects.requireNonNull(mHandler).obtainMessage(Constants.MESSAGE_STATE_CHANGE, state, -1).sendToTarget();
+        // Broadcast the new state to the Handler so the UI Activity can update
+        broadcastState(state);
+    }
+
+    private synchronized void broadcastState(int state) {
+        Intent intent = new Intent(Constants.INTENT_BT_MESSAGE);
+        intent.putExtra(Constants.KEY_WHAT, Constants.MESSAGE_STATE_CHANGE);
+        intent.putExtra(Constants.KEY_STATE, state);
+        LocalBroadcastManager.getInstance(cBaseApplication.getAppContext()).sendBroadcast(intent);
+    }
+
+    private synchronized void broadcastMessageRead(String message) {
+        Intent intent = new Intent(Constants.INTENT_BT_MESSAGE);
+        intent.putExtra(Constants.KEY_WHAT, Constants.MESSAGE_READ);
+        intent.putExtra(Constants.KEY_MESSAGE, message);
+        LocalBroadcastManager.getInstance(cBaseApplication.getAppContext()).sendBroadcast(intent);
+    }
+
+    private synchronized void broadcastMessageWrite(String message) {
+        Intent intent = new Intent(Constants.INTENT_BT_MESSAGE);
+        intent.putExtra(Constants.KEY_WHAT, Constants.MESSAGE_WRITE);
+        intent.putExtra(Constants.KEY_MESSAGE, message);
+        LocalBroadcastManager.getInstance(cBaseApplication.getAppContext()).sendBroadcast(intent);
+    }
+
+    private synchronized void broadcastInfo(String info) {
+        Intent intent = new Intent(Constants.INTENT_BT_MESSAGE);
+        intent.putExtra(Constants.KEY_WHAT, Constants.MESSAGE_INFO);
+        intent.putExtra(Constants.KEY_MESSAGE, info);
+        LocalBroadcastManager.getInstance(cBaseApplication.getAppContext()).sendBroadcast(intent);
     }
 
     public synchronized int getState() {
@@ -85,11 +108,7 @@ public class BluetoothService {
     private void connectionFailed() {
         Log.e(TAG, "Connection Failed");
         // Send a failure item_message back to the Activity
-        Message msg = Objects.requireNonNull(mHandler).obtainMessage(Constants.MESSAGE_INFO);
-        Bundle bundle = new Bundle();
-        bundle.putString(Constants.INFO, "Unable to connect");
-        msg.setData(bundle);
-        mHandler.sendMessage(msg);
+        broadcastInfo("Unable to connect!");
         setState(Constants.STATE_ERROR);
         cancelConnectThread();
     }
@@ -100,11 +119,7 @@ public class BluetoothService {
     private void connectionLost() {
         Log.e(TAG, "Connection Lost");
         // Send a failure item_message back to the Activity
-        Message msg = Objects.requireNonNull(mHandler).obtainMessage(Constants.MESSAGE_INFO);
-        Bundle bundle = new Bundle();
-        bundle.putString(Constants.INFO, "Connection was lost");
-        msg.setData(bundle);
-        mHandler.sendMessage(msg);
+        broadcastInfo("Connection was lost");
         setState(Constants.STATE_ERROR);
         cancelConnectedThread();
     }
@@ -160,7 +175,7 @@ public class BluetoothService {
             try {
                 // MY_UUID is the app's UUID string, also used by the server code
                 UUID uuid = Constants.myUUID;
-                tmpSocket = device.createRfcommSocketToServiceRecord(uuid);
+                tmpSocket = mmDevice.createRfcommSocketToServiceRecord(uuid);
             } catch (IOException e) {
                 Log.e(TAG, "Create RFcomm socket failed", e);
             }
@@ -246,7 +261,7 @@ public class BluetoothService {
                     readMessage.append(read);
 
                     if (read.contains("\n")) {
-                        mHandler.obtainMessage(Constants.MESSAGE_READ, bytes, -1, readMessage.toString()).sendToTarget();
+                        broadcastMessageRead(readMessage.toString());
                         readMessage.setLength(0);
                     }
 
@@ -264,7 +279,7 @@ public class BluetoothService {
         public void write(byte[] bytes) {
             try {
                 mmOutStream.write(bytes);
-                mHandler.obtainMessage(Constants.MESSAGE_WRITE, -1, -1, bytes).sendToTarget();
+                broadcastMessageWrite(new String(bytes));
             } catch (IOException e) {
                 Log.e(TAG, "Exception during write", e);
             }

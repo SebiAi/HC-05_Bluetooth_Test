@@ -1,8 +1,8 @@
 package com.sebiai.hc_05bluetoothtest;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -13,8 +13,6 @@ import android.content.IntentFilter;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.AdapterView;
@@ -45,6 +43,7 @@ public class MainActivity extends AppCompatActivity {
     // Bluetooth
     BluetoothAdapter bluetoothAdapter = null;
     Set<BluetoothDevice> devices;
+    mReceiver receiver = null;
 
     // Other
     public View currentView = null;
@@ -64,9 +63,11 @@ public class MainActivity extends AppCompatActivity {
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
         // Broadcast Receiver
+        /*
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(BluetoothDevice.ACTION_UUID);
         registerReceiver(mReceiver, intentFilter);
+         */
 
         // Find all views
             // List devices
@@ -85,6 +86,24 @@ public class MainActivity extends AppCompatActivity {
 
         connectionStatusTextView = findViewById(R.id.textview_connectionstatus);
         outputTextView = findViewById(R.id.textview_output);
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+
+        if (receiver == null) {
+            receiver = new mReceiver(this);
+            IntentFilter filter = new IntentFilter(Constants.INTENT_BT_MESSAGE);
+            LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter);
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        if (receiver != null)
+            unregisterReceiver(receiver);
+        super.onStop();
     }
 
     @RequiresPermission(value = "android.permission.BLUETOOTH_CONNECT")
@@ -139,8 +158,7 @@ public class MainActivity extends AppCompatActivity {
             BluetoothDevice bluetoothDevice = bluetoothAdapter.getRemoteDevice(address);
 
             // Let BluetoothService handle everything
-            mHandler handler = new mHandler(MainActivity.this);
-            setBluetoothService(new BluetoothService(handler, bluetoothDevice));
+            setBluetoothService(new BluetoothService(bluetoothDevice));
             getBluetoothService().connect();
 
             /*
@@ -152,20 +170,20 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    /*
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
 
             if (BluetoothDevice.ACTION_UUID.equals(action)) {
-                /*
                 Runnable bluetoothRunnable = new BluetoothRunnable(intent, (MainActivity) context);
                 thread = new Thread(bluetoothRunnable);
                 thread.start();
-                 */
             }
         }
     };
+     */
 
     void sendButtonOnClick(View view) {
         String sendString = inputEditText.getText().toString() + "\r\n";
@@ -202,20 +220,22 @@ public class MainActivity extends AppCompatActivity {
         outputTextView.setText(text);
     }
 
-    private static class mHandler extends Handler {
+    private static class mReceiver extends BroadcastReceiver {
         private final WeakReference<MainActivity> mActivity;
 
-        public mHandler(MainActivity activity) {
+        public mReceiver(MainActivity activity) {
             mActivity = new WeakReference<>(activity);
         }
 
         @Override
-        public void handleMessage(@NonNull Message msg) {
+        public void onReceive(Context context, Intent intent) {
+            // No need to check intent action - only one intent will trigger this
             final MainActivity activity = mActivity.get();
 
-            switch (msg.what) {
+            Bundle extras = intent.getExtras();
+            switch (extras.getInt(Constants.KEY_WHAT)) {
                 case Constants.MESSAGE_STATE_CHANGE:
-                    switch (msg.arg1) {
+                    switch (extras.getInt(Constants.KEY_STATE)) {
                         case Constants.STATE_CONNECTED:
                             activity.connectionStatusTextView.setText("Connected!");
                             activity.sendButton.setEnabled(true);
@@ -236,7 +256,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                     break;
                 case Constants.MESSAGE_READ:
-                    String message = (String) msg.obj;
+                    String message = extras.getString(Constants.KEY_MESSAGE);
                     activity.addMessageToTextView("R: " + message);
                     break;
             }
