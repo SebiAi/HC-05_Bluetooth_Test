@@ -29,8 +29,8 @@ public class TestActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onResume() {
-        super.onResume();
+    protected void onStart() {
+        super.onStart();
 
         receiver = new TestActivity.mReceiver(this);
         IntentFilter filter = new IntentFilter(Constants.INTENT_BT_MESSAGE);
@@ -38,15 +38,14 @@ public class TestActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onPause() {
-        super.onPause();
+    protected void onStop() {
+        super.onStop();
 
         try {
             LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
         } catch (IllegalArgumentException e) {
             // Should not matter
         }
-        receiver = null;
     }
 
     private void requestButtonOnClick(View view) {
