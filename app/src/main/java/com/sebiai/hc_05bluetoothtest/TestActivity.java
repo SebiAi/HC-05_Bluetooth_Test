@@ -3,12 +3,13 @@ package com.sebiai.hc_05bluetoothtest;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
-import android.app.Activity;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
+import android.view.View;
+import android.widget.Button;
 import android.widget.Toast;
 
 import java.lang.ref.WeakReference;
@@ -16,30 +17,44 @@ import java.lang.ref.WeakReference;
 public class TestActivity extends AppCompatActivity {
     TestActivity.mReceiver receiver = null;
 
+    Button requestButton;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_test);
+
+        requestButton = findViewById(R.id.button_request);
+        requestButton.setOnClickListener(this::requestButtonOnClick);
     }
 
     @Override
-    protected void onStart() {
-        super.onStart();
+    protected void onResume() {
+        super.onResume();
 
-        setResult(Activity.RESULT_OK);
+        receiver = new TestActivity.mReceiver(this);
+        IntentFilter filter = new IntentFilter(Constants.INTENT_BT_MESSAGE);
+        LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter);
+    }
 
-        if (receiver == null) {
-            receiver = new TestActivity.mReceiver(this);
-            IntentFilter filter = new IntentFilter(Constants.INTENT_BT_MESSAGE);
-            LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter);
+    @Override
+    protected void onPause() {
+        super.onPause();
+
+        try {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
+        } catch (IllegalArgumentException e) {
+            // Should not matter
         }
+        receiver = null;
     }
 
-    @Override
-    protected void onStop() {
-        if (receiver != null)
-            unregisterReceiver(receiver);
-        super.onStop();
+    private void requestButtonOnClick(View view) {
+        getBluetoothService().write(">#\r\n");
+    }
+
+    BluetoothService getBluetoothService() {
+        return ((cBaseApplication)getApplicationContext()).bluetoothService;
     }
 
     private static class mReceiver extends BroadcastReceiver {

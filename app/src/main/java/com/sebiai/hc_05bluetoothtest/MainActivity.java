@@ -8,7 +8,6 @@ import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
-import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
@@ -95,21 +94,24 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onStart() {
-        super.onStart();
+    protected void onResume() {
+        super.onResume();
 
-        if (receiver == null) {
-            receiver = new mReceiver(this);
-            IntentFilter filter = new IntentFilter(Constants.INTENT_BT_MESSAGE);
-            LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter);
-        }
+        receiver = new mReceiver(this);
+        IntentFilter filter = new IntentFilter(Constants.INTENT_BT_MESSAGE);
+        LocalBroadcastManager.getInstance(this).registerReceiver(receiver, filter);
     }
 
     @Override
-    protected void onStop() {
-        if (receiver != null)
-            unregisterReceiver(receiver);
-        super.onStop();
+    protected void onPause() {
+        super.onPause();
+
+        try {
+            LocalBroadcastManager.getInstance(this).unregisterReceiver(receiver);
+        } catch (IllegalArgumentException e) {
+            // Should not matter
+        }
+        receiver = null;
     }
 
     @RequiresPermission(value = "android.permission.BLUETOOTH_CONNECT")
