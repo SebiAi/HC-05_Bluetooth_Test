@@ -1,9 +1,14 @@
 package com.sebiai.hc_05bluetoothtest;
 
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.RequiresPermission;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
+import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
@@ -80,6 +85,7 @@ public class MainActivity extends AppCompatActivity {
             // Send button
         sendButton = findViewById(R.id.button_send);
         sendButton.setOnClickListener(this::sendButtonOnClick);
+        sendButton.setOnLongClickListener(this::sendButtonOnLongClick);
             // Clear button
         clearButton = findViewById(R.id.button_clear);
         clearButton.setOnClickListener(this::clearButtonOnClick);
@@ -185,6 +191,23 @@ public class MainActivity extends AppCompatActivity {
     };
      */
 
+    ActivityResultLauncher<Intent> mActivityResultLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            new ActivityResultCallback<ActivityResult>() {
+                @Override
+                public void onActivityResult(ActivityResult result) {
+                    if (result.getResultCode() == Constants.STATE_ERROR) {
+                        onError();
+                    }
+                }
+            });
+
+    private boolean sendButtonOnLongClick(View view) {
+        Intent intent = new Intent(this, TestActivity.class);
+        //startActivity(intent);
+        mActivityResultLauncher.launch(intent);
+        return true;
+    }
     void sendButtonOnClick(View view) {
         String sendString = inputEditText.getText().toString() + "\r\n";
         addMessageToTextView("S: " + sendString);
@@ -220,6 +243,12 @@ public class MainActivity extends AppCompatActivity {
         outputTextView.setText(text);
     }
 
+    private void onError() {
+        connectionStatusTextView.setText("Error - Not Connected");
+        currentView.setBackground(outputTextView.getBackground());
+        sendButton.setEnabled(false);
+    }
+
     private static class mReceiver extends BroadcastReceiver {
         private final WeakReference<MainActivity> mActivity;
 
@@ -249,9 +278,7 @@ public class MainActivity extends AppCompatActivity {
                             activity.sendButton.setEnabled(false);
                             break;
                         case Constants.STATE_ERROR:
-                            activity.connectionStatusTextView.setText("Error - Not Connected");
-                            activity.currentView.setBackground(activity.outputTextView.getBackground());
-                            activity.sendButton.setEnabled(false);
+                            activity.onError();
                             break;
                     }
                     break;
